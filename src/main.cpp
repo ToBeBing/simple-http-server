@@ -53,12 +53,20 @@ int main(int argc, char **argv) {
   
   std::cout << "Waiting for a client to connect...\n";
   
-  accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len); //阻塞函数，程序等待客户端连接
-  std::cout << "Client connected\n";
+  while(true){
+     int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len); //阻塞函数，程序等待客户端连接
+     if(client_fd < 0){
+         std::cerr << "accept failed\n";
+         continue;
+     }
+     std::cout << "Client connected\n";
 
-  send(server_fd, "HTTP/1.1 200 OK\r\n\r\n", 13, 0);
+      const char *http_response = "HTTP/1.1 200 OK\r\n\r\n";
+      send(client_fd, http_response, strlen(http_response), 0);
+
+      close(client_fd);
+  }
   
   close(server_fd);
-
   return 0;
 }
