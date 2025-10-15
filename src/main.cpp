@@ -20,8 +20,8 @@ int main(int argc, char **argv) {
   //
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd < 0) {
-   std::cerr << "Failed to create server socket\n";
-   return 1;
+    std::cerr << "Failed to create server socket\n";
+    return 1;
   }
   
   // Since the tester restarts your program quite often, setting SO_REUSEADDR
@@ -53,8 +53,10 @@ int main(int argc, char **argv) {
   
   std::cout << "Waiting for a client to connect...\n";
   
-  accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
+  accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len); //阻塞函数，程序等待客户端连接
   std::cout << "Client connected\n";
+
+  send(server_fd, "HTTP/1.1 200 OK\r\n\r\n", 13, 0);
   
   close(server_fd);
 
