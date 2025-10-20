@@ -7,6 +7,8 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <vector>
+#include <sstream>
 
 int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
@@ -60,11 +62,33 @@ int main(int argc, char **argv) {
          continue;
      }
      std::cout << "Client connected\n";
+     std::vector<char> buffer(1024);
+     std::string request;
+     ssize_t bytes_received = recv(client_fd, buffer.data(), buffer.size(), 0);
+     if(bytes_received > 0){
+        request.assign(buffer.data(), bytes_received);
+        std::cout << request << std::endl;
+        // 解析字符串
+        // 1. 解析请求行 (e.g., "GET /index.html HTTP/1.1")
+        std::stringstream request_stream(request);
+        std::string method, path, http_version;
+        std::string line;
 
-      const char *http_response = "HTTP/1.1 200 OK\r\n\r\n";
-      send(client_fd, http_response, strlen(http_response), 0);
+        if(std::getline(request_stream, line) && !line.empty()){
+            std::stringstream request_line_stream(line);
+            request_line_stream >> method >> path >> http_version;
+        }
+        const char *http_response;
+        if(path != "/") http_response = "HTTP/1.1 404 Not Found\r\n\r\n";
+        else http_response = "HTTP/1.1 200 OK\r\n\r\n";
+        //send message
+        send(client_fd, http_response, strlen(http_response), 0);
+     }else if(bytes_received == 0){
+        std::cout << "Client disconnected." << std::endl;
+     }
 
-      close(client_fd);
+    
+    close(client_fd);
   }
   
   close(server_fd);
