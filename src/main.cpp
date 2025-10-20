@@ -78,10 +78,11 @@ int main(int argc, char **argv) {
             std::stringstream request_line_stream(line);
             request_line_stream >> method >> path >> http_version;
         }
+
+        //发送消息
         const char *http_response;
         if(path != "/") http_response = "HTTP/1.1 404 Not Found\r\n\r\n";
         else http_response = "HTTP/1.1 200 OK\r\n\r\n";
-        //send message
         send(client_fd, http_response, strlen(http_response), 0);
      }else if(bytes_received == 0){
         std::cout << "Client disconnected." << std::endl;
