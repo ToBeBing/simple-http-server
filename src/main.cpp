@@ -93,23 +93,17 @@ int main(int argc, char **argv) {
             std::stringstream request_line_stream(line);
             request_line_stream >> method >> path >> http_version;
         }
+        // 2.解析headers
         std::string host;
-        if(std::getline(request_stream, line) && !line.empty()){
-            std::stringstream request_line_stream(line);
-            std::string buff;
-            request_line_stream >> buff >> host;
-        }
         std::string accept;
-        if(std::getline(request_stream, line) && !line.empty()){
-            std::stringstream request_line_stream(line);
-            std::string buff;
-            request_line_stream >> buff >> accept;
-        }
         std::string user_agent;
-        if(std::getline(request_stream, line) && !line.empty()){
+        while(std::getline(request_stream, line) && !line.empty()){
             std::stringstream request_line_stream(line);
             std::string buff;
-            request_line_stream >> buff >> user_agent;
+            request_line_stream >> buff;
+            if(buff == "Host:") request_line_stream >> host;
+            else if(buff == "Accept:") request_line_stream >> accept;
+            else if(buff == "User-Agent:") request_line_stream >> user_agent;
         }
 
         std::vector<std::string> v = StringSplit(path, '/');
