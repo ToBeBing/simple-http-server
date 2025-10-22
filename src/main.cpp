@@ -93,9 +93,28 @@ int main(int argc, char **argv) {
             std::stringstream request_line_stream(line);
             request_line_stream >> method >> path >> http_version;
         }
+        std::string host;
+        if(std::getline(request_stream, line) && !line.empty()){
+            std::stringstream request_line_stream(line);
+            std::string buff;
+            request_line_stream >> buff >> host;
+        }
+        std::string accept;
+        if(std::getline(request_stream, line) && !line.empty()){
+            std::stringstream request_line_stream(line);
+            std::string buff;
+            request_line_stream >> buff >> accept;
+        }
+        std::string user_agent;
+        if(std::getline(request_stream, line) && !line.empty()){
+            std::stringstream request_line_stream(line);
+            std::string buff;
+            request_line_stream >> buff >> user_agent;
+        }
 
         std::vector<std::string> v = StringSplit(path, '/');
         // Log(v[1].c_str());
+        Log(user_agent.c_str());
 
         //2 .发送消息
         if (path == "/") {
@@ -104,14 +123,21 @@ int main(int argc, char **argv) {
             send(client_fd, http_response.data(), http_response.size(), 0);
         } 
         // 检查路径是否是 /echo/... 格式
-        else if (v.size() > 1 && v[1] == "echo") {
+        else if (v.size() > 1 && (v[1] == "echo")) {
             // 确保 v.back() 是安全的
             std::string body = v.back();
             std::string headers = "Content-Type: text/plain\r\nContent-Length: " + std::to_string(body.size()) +"\r\n\r\n";
             std::string status_ok = "HTTP/1.1 200 OK\r\n";
             std::string http_response = status_ok + headers + body;
             send(client_fd, http_response.data(), http_response.size(), 0);
-        } 
+        }
+        else if(v.size() > 1 && (v[1] == "user-agent")) {
+            std::string body = user_agent;
+            std::string headers = "Content-Type: text/plain\r\nContent-Length: " + std::to_string(user_agent.size()) +"\r\n\r\n";
+            std::string status_ok = "HTTP/1.1 200 OK\r\n";
+            std::string http_response = status_ok + headers + body;
+            send(client_fd, http_response.data(), http_response.size(), 0);
+        }
         // 其他所有情况，返回 404 Not Found
         else {
             std::string http_response = "HTTP/1.1 404 Not Found\r\n\r\n";
