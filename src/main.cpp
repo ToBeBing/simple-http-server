@@ -10,6 +10,7 @@
 #include <vector>
 #include <sstream>
 #include<thread>
+#include<fstream>
 
 std::vector<std::string> StringSplit(std::string s, char split){
    std::istringstream iss(s);
@@ -21,9 +22,26 @@ std::vector<std::string> StringSplit(std::string s, char split){
    return res;
 }
 
-void Log(const char* messgae){
-  std::cout <<"[Log]: "<< messgae <<std::endl;
+void LogError(const char* message){
+  std::cout <<"[Error]: "<< message << "\n";
 }
+
+std::string readFileContents(const std::string& filepath){
+  std::ifstream fileStream(filepath);
+  if(!fileStream.is_open()){
+     LogError("open file erro");
+     return "";
+  }
+
+  std::stringstream buffer;
+  buffer << fileStream.rdbuf();
+  return buffer.str();
+}
+
+void Log(const char* messgae){
+  std::cout <<"[Log]: "<< messgae << "\n";
+}
+
 
 struct RequestInfo{
     std::string method, path, http_version;
@@ -32,7 +50,7 @@ struct RequestInfo{
     std::string user_agent;
 };
 
-void handle_client(int client_fd){
+void handle_client(int client_fd, std::string directory){
   Log("Client connected");
   RequestInfo requestinfo;
      std::vector<char> buffer(1024);
@@ -86,6 +104,16 @@ void handle_client(int client_fd){
             std::string http_response = status_ok + headers + body;
             send(client_fd, http_response.data(), http_response.size(), 0);
         }
+        else if(v.size() > 1 && (v[1] == "files")){
+            std::string filename = v[2];
+            std::string path = directory +"/"+ filename;
+            std::string content = readFileContents(path);
+            std::string body = content;
+            std::string headers = "Content-Type: text/plain\r\nContent-Length: " + std::to_string(content.size()) +"\r\n\r\n";
+            std::string status_ok = "HTTP/1.1 200 OK\r\n";
+            std::string http_response = status_ok + headers + body;
+            send(client_fd, http_response.data(), http_response.size(), 0);
+        }
         // 其他所有情况，返回 404 Not Found
         else {
             std::string http_response = "HTTP/1.1 404 Not Found\r\n\r\n";
@@ -103,6 +131,14 @@ int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
+
+  std::string directory = ".";
+  if(argc > 2){
+     if (std::string(argv[1]) == "--directory") {
+      directory = argv[2];
+      Log(("Serving files from directory: " + directory).c_str());
+    }
+  }
   
   // You can use print statements as follows for debugging, they'll be visible when running tests.
   // std::cout << "Logs from your program will appear here!\n";
@@ -151,7 +187,7 @@ int main(int argc, char **argv) {
          std::cerr << "accept failed\n";
          continue;
      }
-     std::thread(handle_client,client_fd).detach();
+     std::thread(handle_client,client_fd,directory).detach();
   }
   
   close(server_fd);
