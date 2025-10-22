@@ -76,7 +76,7 @@ struct http_response{
     std::string content_len = "",
     std::string content_type = "",
     std::string status_code="200",
-    std::string status_message="Ok"){
+    std::string status_message="Ok\n"){
         this->body = body;
         this->http_version = http_version;
         this->content_len = content_len;
@@ -159,7 +159,7 @@ void handle_client(int client_fd, std::string directory){
                 "",
                 "",
                 "404", 
-                "Not Found"
+                "Not Found\n"
                 );
                 send(client_fd, response.response_string().data(), response.response_string().size(), 0);
             }
@@ -183,7 +183,7 @@ void handle_client(int client_fd, std::string directory){
                 "",
                 "",
                 "404", 
-                "Not Found"
+                "Not Found\n"
             );
             send(client_fd, response.response_string().data(), response.response_string().size(), 0);
         }
