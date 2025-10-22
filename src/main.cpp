@@ -79,7 +79,7 @@ struct http_response{
     std::string content_len = "",
     std::string content_type = "",
     std::string status_code="200",
-    std::string status_message="Ok"){
+    std::string status_message="OK"){
         this->body = body;
         this->http_version = http_version;
         this->content_len = content_len;
