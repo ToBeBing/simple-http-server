@@ -24,6 +24,13 @@ void Log(const char* messgae){
   std::cout <<"[Log]: "<< messgae <<std::endl;
 }
 
+struct RequestInfo{
+    std::string method, path, http_version;
+    std::string host;
+    std::string accept;
+    std::string user_agent;
+};
+
 int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
   std::cout << std::unitbuf;
@@ -71,6 +78,7 @@ int main(int argc, char **argv) {
   Log("Waiting for a client to connect...");
   
   while(true){
+     RequestInfo requestinfo;
      int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len); //阻塞函数，程序等待客户端连接
      if(client_fd < 0){
          std::cerr << "accept failed\n";
@@ -86,32 +94,26 @@ int main(int argc, char **argv) {
         // 解析字符串
         // 1. 解析请求行 (e.g., "GET /index.html HTTP/1.1")
         std::stringstream request_stream(request);
-        std::string method, path, http_version;
         std::string line;
-
+        std::stringstream request_line_stream(line);
         if(std::getline(request_stream, line) && !line.empty()){
-            std::stringstream request_line_stream(line);
-            request_line_stream >> method >> path >> http_version;
+            request_line_stream >> requestinfo.method >> requestinfo.path >> requestinfo.http_version;
         }
         // 2.解析headers
-        std::string host;
-        std::string accept;
-        std::string user_agent;
         while(std::getline(request_stream, line) && !line.empty()){
-            std::stringstream request_line_stream(line);
             std::string buff;
             request_line_stream >> buff;
-            if(buff == "Host:") request_line_stream >> host;
-            else if(buff == "Accept:") request_line_stream >> accept;
-            else if(buff == "User-Agent:") request_line_stream >> user_agent;
+            if(buff == "Host:") request_line_stream >> requestinfo.host;
+            else if(buff == "Accept:") request_line_stream >> requestinfo.accept;
+            else if(buff == "User-Agent:") request_line_stream >> requestinfo.user_agent;
         }
 
-        std::vector<std::string> v = StringSplit(path, '/');
+        std::vector<std::string> v = StringSplit(requestinfo.path, '/');
         // Log(v[1].c_str());
-        Log(user_agent.c_str());
+        Log(requestinfo.user_agent.c_str());
 
         //2 .发送消息
-        if (path == "/") {
+        if (requestinfo.path == "/") {
             // 对于根路径，直接返回 200 OK
             std::string http_response = "HTTP/1.1 200 OK\r\n\r\n";
             send(client_fd, http_response.data(), http_response.size(), 0);
@@ -126,8 +128,8 @@ int main(int argc, char **argv) {
             send(client_fd, http_response.data(), http_response.size(), 0);
         }
         else if(v.size() > 1 && (v[1] == "user-agent")) {
-            std::string body = user_agent;
-            std::string headers = "Content-Type: text/plain\r\nContent-Length: " + std::to_string(user_agent.size()) +"\r\n\r\n";
+            std::string body = requestinfo.user_agent;
+            std::string headers = "Content-Type: text/plain\r\nContent-Length: " + std::to_string(requestinfo.user_agent.size()) +"\r\n\r\n";
             std::string status_ok = "HTTP/1.1 200 OK\r\n";
             std::string http_response = status_ok + headers + body;
             send(client_fd, http_response.data(), http_response.size(), 0);
