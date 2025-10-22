@@ -168,7 +168,7 @@ void handle_client(int client_fd, std::string directory){
                  content,
                 "HTTP/1.1",
                 std::to_string(content.size()),
-                "octet-stream",
+                "application/octet-stream",
                 "200",
                 "OK"
               );
