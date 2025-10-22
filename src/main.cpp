@@ -26,10 +26,11 @@ void LogError(const char* message){
   std::cout <<"[Error]: "<< message << "\n";
 }
 
-std::string readFileContents(const std::string& filepath){
+std::string readFileContents(const std::string& filepath, bool& open_success){
   std::ifstream fileStream(filepath);
   if(!fileStream.is_open()){
-     LogError("open file erro");
+     LogError("open file error");
+     open_success = false;
      return "";
   }
 
@@ -43,16 +44,51 @@ void Log(const char* messgae){
 }
 
 
-struct RequestInfo{
+struct http_request{
     std::string method, path, http_version;
     std::string host;
     std::string accept;
     std::string user_agent;
+
+};
+
+struct http_response{
+    std::string body;
+    std::string http_version;
+    std::string content_len;
+    std::string content_type;
+    std::string status_code;
+    std::string status_message;
+
+    std::string response_string(){
+        std::string response = http_version + " " + status_code + " " + status_message + "\r\n";
+        if(content_len != "" && content_type != ""){
+            response += "Content-Length: " + content_len + "\r\n";
+            response += "Content-Type: " + content_type + "\r\n\r\n";
+            response += body;
+        }
+        return response;
+    }
+
+    http_response(
+    std::string body = "",
+    std::string http_version = "HTTP/1.1",
+    std::string content_len = "",
+    std::string content_type = "",
+    std::string status_code="200",
+    std::string status_message="Ok"){
+        this->body = body;
+        this->http_version = http_version;
+        this->content_len = content_len;
+        this->content_type = content_type;
+        this->status_code = status_code;
+        this->status_message = status_message;
+    }
 };
 
 void handle_client(int client_fd, std::string directory){
   Log("Client connected");
-  RequestInfo requestinfo;
+  http_request http_request;
      std::vector<char> buffer(1024);
      std::string request;
      ssize_t bytes_received = recv(client_fd, buffer.data(), buffer.size(), 0);
@@ -65,59 +101,91 @@ void handle_client(int client_fd, std::string directory){
         std::string line;
         if(std::getline(request_stream, line) && !line.empty()){
             std::stringstream request_line_stream(line);
-            request_line_stream >> requestinfo.method >> requestinfo.path >> requestinfo.http_version;
+            request_line_stream >> http_request.method >> http_request.path >> http_request.http_version;
         }
         // 2.解析headers
         while(std::getline(request_stream, line) && !line.empty()){
             std::string buff;
             std::stringstream request_line_stream(line);
             request_line_stream >> buff;
-            if(buff == "Host:") request_line_stream >> requestinfo.host;
-            else if(buff == "Accept:") request_line_stream >> requestinfo.accept;
-            else if(buff == "User-Agent:") request_line_stream >> requestinfo.user_agent;
+            if(buff == "Host:") request_line_stream >> http_request.host;
+            else if(buff == "Accept:") request_line_stream >> http_request.accept;
+            else if(buff == "User-Agent:") request_line_stream >> http_request.user_agent;
         }
 
-        std::vector<std::string> v = StringSplit(requestinfo.path, '/');
+        std::vector<std::string> v = StringSplit(http_request.path, '/');
         // Log(v[1].c_str());
-        // Log(requestinfo.user_agent.c_str());
-        // Log(requestinfo.method.c_str());
+        // Log(http_request.user_agent.c_str());
+        // Log(http_request.method.c_str());
 
         //2 .发送消息
-        if (requestinfo.path == "/") {
-            // 对于根路径，直接返回 200 OK
-            std::string http_response = "HTTP/1.1 200 OK\r\n\r\n";
-            send(client_fd, http_response.data(), http_response.size(), 0);
+        if (http_request.path == "/") {
+            http_response response;
+            send(client_fd, response.response_string().data(), response.response_string().size(), 0);
         } 
         // 检查路径是否是 /echo/... 格式
         else if (v.size() > 1 && (v[1] == "echo")) {
             // 确保 v.back() 是安全的
-            std::string body = v.back();
-            std::string headers = "Content-Type: text/plain\r\nContent-Length: " + std::to_string(body.size()) +"\r\n\r\n";
-            std::string status_ok = "HTTP/1.1 200 OK\r\n";
-            std::string http_response = status_ok + headers + body;
-            send(client_fd, http_response.data(), http_response.size(), 0);
+            http_response response(
+                 v.back(),
+                "HTTP/1.1",
+                std::to_string(v.back().size()),
+                "text/plain",
+                "200",
+                "OK"
+            );
+            send(client_fd, response.response_string().data(), response.response_string().size(), 0);
         }
         else if(v.size() > 1 && (v[1] == "user-agent")) {
-            std::string body = requestinfo.user_agent;
-            std::string headers = "Content-Type: text/plain\r\nContent-Length: " + std::to_string(requestinfo.user_agent.size()) +"\r\n\r\n";
-            std::string status_ok = "HTTP/1.1 200 OK\r\n";
-            std::string http_response = status_ok + headers + body;
-            send(client_fd, http_response.data(), http_response.size(), 0);
+            http_response response(
+                 http_request.user_agent,
+                "HTTP/1.1",
+                std::to_string(http_request.user_agent.size()),
+                "text/plain",
+                "200",
+                "OK"
+            );
+            send(client_fd, response.response_string().data(), response.response_string().size(), 0);
         }
         else if(v.size() > 1 && (v[1] == "files")){
             std::string filename = v[2];
             std::string path = directory +"/"+ filename;
-            std::string content = readFileContents(path);
-            std::string body = content;
-            std::string headers = "Content-Type: text/plain\r\nContent-Length: " + std::to_string(content.size()) +"\r\n\r\n";
-            std::string status_ok = "HTTP/1.1 200 OK\r\n";
-            std::string http_response = status_ok + headers + body;
-            send(client_fd, http_response.data(), http_response.size(), 0);
+            bool open_success = true;
+            std::string content = readFileContents(path, open_success);
+            if(!open_success){
+                http_response response(
+                 "",
+                "HTTP/1.1",
+                "",
+                "",
+                "404", 
+                "Not Found"
+                );
+                send(client_fd, response.response_string().data(), response.response_string().size(), 0);
+            }
+            else{
+              http_response response(
+                 content,
+                "HTTP/1.1",
+                std::to_string(content.size()),
+                "octet-stream",
+                "200",
+                "OK"
+              );
+              send(client_fd, response.response_string().data(), response.response_string().size(), 0);
+            }
         }
         // 其他所有情况，返回 404 Not Found
         else {
-            std::string http_response = "HTTP/1.1 404 Not Found\r\n\r\n";
-            send(client_fd, http_response.data(), http_response.size(), 0);
+            http_response response(
+                 "",
+                "HTTP/1.1",
+                "",
+                "",
+                "404", 
+                "Not Found"
+            );
+            send(client_fd, response.response_string().data(), response.response_string().size(), 0);
         }
 
      }else if(bytes_received == 0){
