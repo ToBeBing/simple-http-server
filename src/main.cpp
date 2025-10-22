@@ -9,6 +9,7 @@
 #include <netdb.h>
 #include <vector>
 #include <sstream>
+#include<thread>
 
 std::vector<std::string> StringSplit(std::string s, char split){
    std::istringstream iss(s);
@@ -30,6 +31,73 @@ struct RequestInfo{
     std::string accept;
     std::string user_agent;
 };
+
+void handle_client(int client_fd){
+  Log("Client connected");
+  RequestInfo requestinfo;
+     std::vector<char> buffer(1024);
+     std::string request;
+     ssize_t bytes_received = recv(client_fd, buffer.data(), buffer.size(), 0);
+     if(bytes_received > 0){
+        request.assign(buffer.data(), bytes_received);
+        std::cout << request << std::endl;
+        // 解析字符串
+        // 1. 解析请求行 (e.g., "GET /index.html HTTP/1.1")
+        std::stringstream request_stream(request);
+        std::string line;
+        if(std::getline(request_stream, line) && !line.empty()){
+            std::stringstream request_line_stream(line);
+            request_line_stream >> requestinfo.method >> requestinfo.path >> requestinfo.http_version;
+        }
+        // 2.解析headers
+        while(std::getline(request_stream, line) && !line.empty()){
+            std::string buff;
+            std::stringstream request_line_stream(line);
+            request_line_stream >> buff;
+            if(buff == "Host:") request_line_stream >> requestinfo.host;
+            else if(buff == "Accept:") request_line_stream >> requestinfo.accept;
+            else if(buff == "User-Agent:") request_line_stream >> requestinfo.user_agent;
+        }
+
+        std::vector<std::string> v = StringSplit(requestinfo.path, '/');
+        // Log(v[1].c_str());
+        // Log(requestinfo.user_agent.c_str());
+        // Log(requestinfo.method.c_str());
+
+        //2 .发送消息
+        if (requestinfo.path == "/") {
+            // 对于根路径，直接返回 200 OK
+            std::string http_response = "HTTP/1.1 200 OK\r\n\r\n";
+            send(client_fd, http_response.data(), http_response.size(), 0);
+        } 
+        // 检查路径是否是 /echo/... 格式
+        else if (v.size() > 1 && (v[1] == "echo")) {
+            // 确保 v.back() 是安全的
+            std::string body = v.back();
+            std::string headers = "Content-Type: text/plain\r\nContent-Length: " + std::to_string(body.size()) +"\r\n\r\n";
+            std::string status_ok = "HTTP/1.1 200 OK\r\n";
+            std::string http_response = status_ok + headers + body;
+            send(client_fd, http_response.data(), http_response.size(), 0);
+        }
+        else if(v.size() > 1 && (v[1] == "user-agent")) {
+            std::string body = requestinfo.user_agent;
+            std::string headers = "Content-Type: text/plain\r\nContent-Length: " + std::to_string(requestinfo.user_agent.size()) +"\r\n\r\n";
+            std::string status_ok = "HTTP/1.1 200 OK\r\n";
+            std::string http_response = status_ok + headers + body;
+            send(client_fd, http_response.data(), http_response.size(), 0);
+        }
+        // 其他所有情况，返回 404 Not Found
+        else {
+            std::string http_response = "HTTP/1.1 404 Not Found\r\n\r\n";
+            send(client_fd, http_response.data(), http_response.size(), 0);
+        }
+
+     }else if(bytes_received == 0){
+        Log("Client disconnected.");
+     }
+
+    close(client_fd);
+}
 
 int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
@@ -78,73 +146,12 @@ int main(int argc, char **argv) {
   Log("Waiting for a client to connect...");
   
   while(true){
-     RequestInfo requestinfo;
      int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len); //阻塞函数，程序等待客户端连接
      if(client_fd < 0){
          std::cerr << "accept failed\n";
          continue;
      }
-     Log("Client connected");
-     std::vector<char> buffer(1024);
-     std::string request;
-     ssize_t bytes_received = recv(client_fd, buffer.data(), buffer.size(), 0);
-     if(bytes_received > 0){
-        request.assign(buffer.data(), bytes_received);
-        std::cout << request << std::endl;
-        // 解析字符串
-        // 1. 解析请求行 (e.g., "GET /index.html HTTP/1.1")
-        std::stringstream request_stream(request);
-        std::string line;
-        std::stringstream request_line_stream(line);
-        if(std::getline(request_stream, line) && !line.empty()){
-            request_line_stream >> requestinfo.method >> requestinfo.path >> requestinfo.http_version;
-        }
-        // 2.解析headers
-        while(std::getline(request_stream, line) && !line.empty()){
-            std::string buff;
-            request_line_stream >> buff;
-            if(buff == "Host:") request_line_stream >> requestinfo.host;
-            else if(buff == "Accept:") request_line_stream >> requestinfo.accept;
-            else if(buff == "User-Agent:") request_line_stream >> requestinfo.user_agent;
-        }
-
-        std::vector<std::string> v = StringSplit(requestinfo.path, '/');
-        // Log(v[1].c_str());
-        Log(requestinfo.user_agent.c_str());
-
-        //2 .发送消息
-        if (requestinfo.path == "/") {
-            // 对于根路径，直接返回 200 OK
-            std::string http_response = "HTTP/1.1 200 OK\r\n\r\n";
-            send(client_fd, http_response.data(), http_response.size(), 0);
-        } 
-        // 检查路径是否是 /echo/... 格式
-        else if (v.size() > 1 && (v[1] == "echo")) {
-            // 确保 v.back() 是安全的
-            std::string body = v.back();
-            std::string headers = "Content-Type: text/plain\r\nContent-Length: " + std::to_string(body.size()) +"\r\n\r\n";
-            std::string status_ok = "HTTP/1.1 200 OK\r\n";
-            std::string http_response = status_ok + headers + body;
-            send(client_fd, http_response.data(), http_response.size(), 0);
-        }
-        else if(v.size() > 1 && (v[1] == "user-agent")) {
-            std::string body = requestinfo.user_agent;
-            std::string headers = "Content-Type: text/plain\r\nContent-Length: " + std::to_string(requestinfo.user_agent.size()) +"\r\n\r\n";
-            std::string status_ok = "HTTP/1.1 200 OK\r\n";
-            std::string http_response = status_ok + headers + body;
-            send(client_fd, http_response.data(), http_response.size(), 0);
-        }
-        // 其他所有情况，返回 404 Not Found
-        else {
-            std::string http_response = "HTTP/1.1 404 Not Found\r\n\r\n";
-            send(client_fd, http_response.data(), http_response.size(), 0);
-        }
-
-     }else if(bytes_received == 0){
-        Log("Client disconnected.");
-     }
-
-    close(client_fd);
+     std::thread(handle_client,client_fd).detach();
   }
   
   close(server_fd);
