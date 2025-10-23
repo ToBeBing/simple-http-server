@@ -175,14 +175,10 @@ void handle_client(int client_fd, std::string directory){
         // 检查路径是否是 /echo/... 格式
         else if (v.size() > 1 && (v[1] == "echo")) {
             // 确保 v.back() 是安全的
-            http_response response(
-                 v.back(),
-                "HTTP/1.1",
-                std::to_string(v.back().size()),
-                "text/plain",
-                "200",
-                "OK"
-            );
+            std::string body_content = v.back();
+            http_response response;
+            response.body = body_content;
+            response.content_type = "text/plain";
             // 检查是否支持 gzip
             bool use_gzip = false;
             for (const auto& enc : http_request.accept_encoding) {
@@ -204,7 +200,7 @@ void handle_client(int client_fd, std::string directory){
             
             // 如果不压缩，才设置原始长度
             if (response.content_encoding.empty()) {
-                response.content_len = std::to_string(http_request.body.size());
+                response.content_len = std::to_string(body_content.size());
             }
 
             std::string resp_str = response.response_string();
