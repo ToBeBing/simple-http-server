@@ -11,7 +11,9 @@
 #include <sstream>
 #include<thread>
 #include<fstream>
+#include<zlib.h>
 
+// 字符串分割函数
 std::vector<std::string> StringSplit(std::string s, char split){
    std::istringstream iss(s);
    std::vector<std::string> res;
@@ -27,6 +29,11 @@ void LogError(const char* message){
 }
 
 
+void Log(const char* messgae){
+  std::cout <<"[Log]: "<< messgae << "\n";
+}
+
+// 读取文件内容的函数
 std::string readFileContents(const std::string& filepath, bool& open_success){
   std::ifstream fileStream(filepath);
   if(!fileStream.is_open()){
@@ -40,10 +47,51 @@ std::string readFileContents(const std::string& filepath, bool& open_success){
   return buffer.str();
 }
 
-void Log(const char* messgae){
-  std::cout <<"[Log]: "<< messgae << "\n";
-}
 
+// Gzip 压缩函数
+std::string gzip_compress(const std::string& data) {
+    if (data.empty()) {
+        return "";
+    }
+
+    z_stream zs;
+    memset(&zs, 0, sizeof(zs));
+
+    // 初始化 zlib 流用于压缩
+    // 15 是窗口大小 (windowBits)，16 是为了添加 gzip 头部和尾部
+    if (deflateInit2(&zs, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
+        LogError("deflateInit2 failed while compressing.");
+        return "";
+    }
+
+    zs.next_in = (Bytef*)data.data();
+    zs.avail_in = data.size();
+
+    int ret;
+    char outbuffer[32768]; // 32KB 的输出缓冲区
+    std::string outstring;
+
+    // 循环压缩数据，直到所有输入都被处理
+    do {
+        zs.next_out = reinterpret_cast<Bytef*>(outbuffer);
+        zs.avail_out = sizeof(outbuffer);
+
+        ret = deflate(&zs, Z_FINISH);
+
+        if (outstring.size() < zs.total_out) {
+            outstring.append(outbuffer, zs.total_out - outstring.size());
+        }
+    } while (ret == Z_OK);
+
+    deflateEnd(&zs);
+
+    if (ret != Z_STREAM_END) {
+        LogError("Exception during gzip compression.");
+        return "";
+    }
+
+    return outstring;
+}
 
 struct http_request{
     std::string method, path, http_version;
@@ -189,11 +237,11 @@ void handle_client(int client_fd, std::string directory){
             }
             if (use_gzip) {
                 // (这里你需要一个 gzip 压缩函数)
-                // std::string compressed_body = gzip_compress(body_content);
-                // response.body = compressed_body;
-                // response.content_encoding = "gzip";
-                // response.content_len = std::to_string(compressed_body.size());
-                
+                std::string compressed_body = gzip_compress(body_content);
+                response.body = compressed_body;
+                response.content_encoding = "gzip";
+                response.content_len = std::to_string(compressed_body.size());
+                Log(response.content_len.c_str());
                 // ** 在你实现压缩前，我们先只设置头部 **
                 response.content_encoding = "gzip";
             }
