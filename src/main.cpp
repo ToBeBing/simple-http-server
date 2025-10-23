@@ -113,6 +113,7 @@ struct http_response{
     std::string status_code;
     std::string status_message;
     std::string content_encoding;
+    std::string connection = "keep-alive";
 
     std::string response_string() {
         std::string response = http_version + " " + status_code + " " + status_message + "\r\n";
@@ -129,6 +130,8 @@ struct http_response{
         if (!content_len.empty()) {
             response += "Content-Length: " + content_len + "\r\n";
         }
+
+        response += "Connection: " + connection + "\r\n";
         
         response += "\r\n"; // 头部结束
         if (!body.empty()) {
@@ -222,15 +225,14 @@ void handle_client(int client_fd, std::string directory){
         // Log(v[1].c_str());
 
         //4.发送消息
+        http_response response;
         if (http_request.path == "/") {
-            http_response response;
-            send(client_fd, response.response_string().data(), response.response_string().size(), 0);
+            
         } 
         // 检查路径是否是 /echo/... 格式
         else if (v.size() > 1 && (v[1] == "echo")) {
             // 确保 v.back() 是安全的
             std::string body_content = v.back();
-            http_response response;
             response.body = body_content;
             response.content_type = "text/plain";
             // 检查是否支持 gzip
@@ -256,21 +258,12 @@ void handle_client(int client_fd, std::string directory){
             if (response.content_encoding.empty()) {
                 response.content_len = std::to_string(body_content.size());
             }
-
-            std::string resp_str = response.response_string();
-            send(client_fd, resp_str.data(), resp_str.size(), 0);
         }
         // 检查路径是否是 /user-agent/... 格式
         else if(v.size() > 1 && (v[1] == "user-agent")) {
-            http_response response(
-                 http_request.user_agent,
-                "HTTP/1.1",
-                std::to_string(http_request.user_agent.size()),
-                "text/plain",
-                "200",
-                "OK"
-            );
-            send(client_fd, response.response_string().data(), response.response_string().size(), 0);
+            response.body = http_request.user_agent;
+            response.content_type = "text/plain";
+            response.content_len = std::to_string(http_request.user_agent.size());
         }
         // 检查路径是否是 /files/... 格式
         else if(v.size() > 1 && (v[1] == "files")){
@@ -283,56 +276,36 @@ void handle_client(int client_fd, std::string directory){
                 }
                 outfile << http_request.body;
                 outfile.close();
-                http_response response(
-                  "",
-                  "HTTP/1.1",
-                  "",
-                  "",
-                  "201", 
-                  "Created"
-                );
-                send(client_fd, response.response_string().data(), response.response_string().size(), 0);
+                response.status_code = "201";
+                response.status_message = "Created";
             }
             else if(http_request.method == "GET"){
               bool open_success = true;
               std::string content = readFileContents(path, open_success);
               if(!open_success){
-                  http_response response(
-                  "",
-                  "HTTP/1.1",
-                  "",
-                  "",
-                  "404", 
-                  "Not Found"
-                  );
-                  send(client_fd, response.response_string().data(), response.response_string().size(), 0);
+                  response.status_code = "404";
+                  response.status_message = "Not Found";
               }
               else{
-                http_response response(
-                  content,
-                  "HTTP/1.1",
-                  std::to_string(content.size()),
-                  "application/octet-stream",
-                  "200",
-                  "OK"
-                );
-                send(client_fd, response.response_string().data(), response.response_string().size(), 0);
+                response.body = content;
+                response.content_type = "application/octet-stream";
+                response.content_len = std::to_string(content.size());
+
               }
             }
         }
         // 其他所有情况，返回 404 Not Found
         else {
-            http_response response(
-                 "",
-                "HTTP/1.1",
-                "",
-                "",
-                "404", 
-                "Not Found"
-            );
-            send(client_fd, response.response_string().data(), response.response_string().size(), 0);
+            response.status_code = "404";
+            response.status_message = "Not Found";
         }
-
+        if(http_request.connection_close){
+            response.connection = "close";
+        }
+        else{
+            response.connection = "keep-alive";
+        }
+        send(client_fd, response.response_string().data(), response.response_string().size(), 0);
      }
      if(http_request.connection_close){
         Log("Connection: close received. Closing connection.");
