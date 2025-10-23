@@ -53,7 +53,7 @@ struct http_request{
     std::string content_type;
     std::string content_len;
     std::string body;
-    std::string accept_encoding;
+    std::vector<std::string> accept_encoding;
 };
 
 struct http_response{
@@ -65,19 +65,25 @@ struct http_response{
     std::string status_message;
     std::string content_encoding;
 
-    std::string response_string(){
-        Log(content_encoding.c_str());
+    std::string response_string() {
         std::string response = http_version + " " + status_code + " " + status_message + "\r\n";
-        if(content_encoding != "" && content_encoding != "invalid-encoding"){
+        
+        // 如果服务器决定使用某种编码，就添加这个头
+        if (!content_encoding.empty()) {
             response += "Content-Encoding: " + content_encoding + "\r\n";
         }
-        if(content_len != "" && content_type != ""){
-            response += "Content-Length: " + content_len + "\r\n";
-            response += "Content-Type: " + content_type + "\r\n";            
+        
+        if (!content_type.empty()) {
+            response += "Content-Type: " + content_type + "\r\n";
         }
-        response += "\r\n";
-        if(body != ""){
-              response += body;
+        // 注意：Content-Length 应该是压缩后的大小
+        if (!content_len.empty()) {
+            response += "Content-Length: " + content_len + "\r\n";
+        }
+        
+        response += "\r\n"; // 头部结束
+        if (!body.empty()) {
+            response += body;
         }
         return response;
     }
@@ -88,16 +94,15 @@ struct http_response{
     std::string content_len = "",
     std::string content_type = "",
     std::string status_code="200",  
-    std::string status_message="OK",
-    std::string content_encoding=""){
+    std::string status_message="OK"){
         this->body = body;
         this->http_version = http_version;
         this->content_len = content_len;
         this->content_type = content_type;
         this->status_code = status_code;
         this->status_message = status_message;
-        this->content_encoding = content_encoding;
     }
+
 };
 
 void handle_client(int client_fd, std::string directory){
@@ -118,25 +123,40 @@ void handle_client(int client_fd, std::string directory){
             request_line_stream >> http_request.method >> http_request.path >> http_request.http_version;
         }
         // 2.解析headers
-        while(std::getline(request_stream, line) && !line.empty()){
-            //读到只包含\r的行结束
-            if (line == "\r") {
-                break;
+        int content_length = 0;
+        while (std::getline(request_stream, line) && !line.empty() && line != "\r") {
+            size_t colon_pos = line.find(':');
+            if (colon_pos != std::string::npos) {
+                std::string header_name = line.substr(0, colon_pos);
+                std::string header_value = line.substr(colon_pos + 1);
+
+                // 去除值前后的空格和回车
+                header_value.erase(0, header_value.find_first_not_of(" \t"));
+                header_value.erase(header_value.find_last_not_of(" \t\r") + 1);
+
+                if (header_name == "Host") {
+                    http_request.host = header_value;
+                } else if (header_name == "User-Agent") {
+                    http_request.user_agent = header_value;
+                } else if (header_name == "Content-Length") {
+                    http_request.content_len = header_value;
+                    try { content_length = std::stoi(header_value); } catch (...) {}
+                } else if (header_name == "Accept-Encoding") {
+                    // 正确处理编码列表
+                    std::stringstream ss(header_value);
+                    std::string encoding;
+                    while (std::getline(ss, encoding, ',')) {
+                        encoding.erase(0, encoding.find_first_not_of(" \t"));
+                        encoding.erase(encoding.find_last_not_of(" \t") + 1);
+                        if (!encoding.empty()) {
+                            http_request.accept_encoding.push_back(encoding);
+                        }
+                    }
+                }
             }
-            std::string buff;
-            std::stringstream request_line_stream(line);
-            request_line_stream >> buff;
-            if(buff == "Host:") request_line_stream >> http_request.host;
-            else if(buff == "Accept:") request_line_stream >> http_request.accept;
-            else if(buff == "User-Agent:") request_line_stream >> http_request.user_agent;
-            else if(buff == "Content-Type:") request_line_stream >> http_request.content_type;
-            else if(buff == "Content-Length:") request_line_stream >> http_request.content_len;
-            else if(buff == "Accept-Encoding:") request_line_stream >> http_request.accept_encoding;
         }
         // 3.解析body
-        int content_length = 0;
-        if(!http_request.content_len.empty()){
-            content_length = std::stoi(http_request.content_len);
+        if(content_length > 0){
             std::string body_buff;
             body_buff.resize(content_length);
             request_stream.read(&body_buff[0], content_length);
@@ -161,10 +181,34 @@ void handle_client(int client_fd, std::string directory){
                 std::to_string(v.back().size()),
                 "text/plain",
                 "200",
-                "OK",
-                http_request.accept_encoding
+                "OK"
             );
-            send(client_fd, response.response_string().data(), response.response_string().size(), 0);
+            // 检查是否支持 gzip
+            bool use_gzip = false;
+            for (const auto& enc : http_request.accept_encoding) {
+                if (enc == "gzip") {
+                    use_gzip = true;
+                    break;
+                }
+            }
+            if (use_gzip) {
+                // (这里你需要一个 gzip 压缩函数)
+                // std::string compressed_body = gzip_compress(body_content);
+                // response.body = compressed_body;
+                // response.content_encoding = "gzip";
+                // response.content_len = std::to_string(compressed_body.size());
+                
+                // ** 在你实现压缩前，我们先只设置头部 **
+                response.content_encoding = "gzip";
+            }
+            
+            // 如果不压缩，才设置原始长度
+            if (response.content_encoding.empty()) {
+                response.content_len = std::to_string(http_request.body.size());
+            }
+
+            std::string resp_str = response.response_string();
+            send(client_fd, resp_str.data(), resp_str.size(), 0);
         }
         // 检查路径是否是 /user-agent/... 格式
         else if(v.size() > 1 && (v[1] == "user-agent")) {
