@@ -1,37 +1,39 @@
-[![progress-banner](https://backend.codecrafters.io/progress/http-server/a60a28ce-94f3-4acc-a5e6-0520a59545b9)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
 
-This is a starting point for C++ solutions to the
-["Build Your Own HTTP server" Challenge](https://app.codecrafters.io/courses/http-server/overview).
+🚀 C++ HTTP/1.1 服务器
+这是一个基于 C++ 实现的高性能 HTTP/1.1 服务器，作为本人的第一个练手项目， 总体难度不大， 模块不多， 代码中存在中英文注释， 同时会打印相应的日志记录。
 
-[HTTP](https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol) is the
-protocol that powers the web. In this challenge, you'll build a HTTP/1.1 server
-that is capable of serving multiple clients.
+本项目从零开始构建，旨在深入理解 TCP 服务器、HTTP 请求/响应语法，并重点实现生产级服务器的关键特性。
 
-Along the way you'll learn about TCP servers,
-[HTTP request syntax](https://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html),
-and more.
+✨ 主要特性概览
+本项目不仅仅满足基础的 HTTP/1.1 规范，还实现了以下核心功能：
 
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
+🌐 HTTP 方法支持： 完整支持 GET 和 POST 请求，能够处理不同的客户端请求类型。
 
-# Passing the first stage
+🔌 持久化连接 (Keep-Alive)： 支持 HTTP/1.1 的 长连接 特性，减少 TCP 握手开销，提高连续请求的性能。
 
-The entry point for your HTTP server implementation is in `src/main.cpp`. Study
-and uncomment the relevant code, and push your changes to pass the first stage:
+⚡ 多线程并发处理： 采用 多线程模型 处理客户端连接，确保服务器能够同时高效地服务多个并发请求。
 
-```sh
-git commit -am "pass 1st stage" # any msg
-git push origin master
-```
+📁 文件服务功能：
 
-Time to move on to the next stage!
+文件上传 (POST)： 接收客户端发送的文件数据并将其安全地存储到服务器文件系统。
 
-# Stage 2 & beyond
+文件查询 (GET)： 根据请求路径从服务器检索并返回对应的文件内容。
 
-Note: This section is for stages 2 and beyond.
+🧩 模块化设计： 结构清晰，易于扩展和维护。
 
-1. Ensure you have `cmake` installed locally
-1. Run `./your_program.sh` to run your program, which is implemented in
-   `src/main.cpp`.
-1. Commit your changes and run `git push origin master` to submit your solution
-   to CodeCrafters. Test output will be streamed to your terminal.
+🛠️ 构建与运行
+依赖项
+确保本地已安装 cmake 和 C++ 编译器（推荐 GCC 或 Clang）。
+请务必在Linux环境下运行，windows用户推荐使用wsl
+
+运行程序
+启动服务器： 运行以下脚本启动您的 HTTP 服务器：
+
+Bash
+
+./run.sh
+测试功能： 服务器启动后，您可以使用 curl 或浏览器测试其功能，例如：
+
+发送 GET 请求：curl http://localhost:4221/echo/test
+
+上传文件：curl -X POST --data "File Content" http://localhost:4221/files/my_file
