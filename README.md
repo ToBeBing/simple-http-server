@@ -29,9 +29,8 @@
 运行程序
 启动服务器： 运行以下脚本启动您的 HTTP 服务器：
 
-Bash
+Bash ./run.sh
 
-./run.sh
 测试功能： 服务器启动后，您可以使用 curl 或浏览器测试其功能，例如：
 
 发送 GET 请求：curl http://localhost:4221/echo/test
