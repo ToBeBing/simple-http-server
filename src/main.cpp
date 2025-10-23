@@ -102,6 +102,7 @@ struct http_request{
     std::string content_len;
     std::string body;
     std::vector<std::string> accept_encoding;
+    bool connection_close = false;
 };
 
 struct http_response{
@@ -155,6 +156,7 @@ struct http_response{
 
 void handle_client(int client_fd, std::string directory){
   Log("Client connected");
+  while(true){
   http_request http_request;
      std::vector<char> buffer(1024);
      std::string request;
@@ -199,6 +201,10 @@ void handle_client(int client_fd, std::string directory){
                         if (!encoding.empty()) {
                             http_request.accept_encoding.push_back(encoding);
                         }
+                    }
+                } else if (header_name == "Connection") {
+                    if (header_value == "close") {
+                        http_request.connection_close = true;
                     }
                 }
             }
@@ -327,10 +333,12 @@ void handle_client(int client_fd, std::string directory){
             send(client_fd, response.response_string().data(), response.response_string().size(), 0);
         }
 
-     }else if(bytes_received == 0){
-        Log("Client disconnected.");
      }
-
+     if(http_request.connection_close){
+        Log("Connection: close received. Closing connection.");
+        break;
+     }
+    }
     close(client_fd);
 }
 
