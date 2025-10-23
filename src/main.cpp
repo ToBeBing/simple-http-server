@@ -53,7 +53,7 @@ struct http_request{
     std::string content_type;
     std::string content_len;
     std::string body;
-
+    std::string accept_encoding;
 };
 
 struct http_response{
@@ -63,9 +63,14 @@ struct http_response{
     std::string content_type;
     std::string status_code;
     std::string status_message;
+    std::string content_encoding;
 
     std::string response_string(){
+        Log(content_encoding.c_str());
         std::string response = http_version + " " + status_code + " " + status_message + "\r\n";
+        if(content_encoding != "" && content_encoding != "invalid-encoding"){
+            response += "Content-Encoding: " + content_encoding + "\r\n";
+        }
         if(content_len != "" && content_type != ""){
             response += "Content-Length: " + content_len + "\r\n";
             response += "Content-Type: " + content_type + "\r\n";            
@@ -82,14 +87,16 @@ struct http_response{
     std::string http_version = "HTTP/1.1",
     std::string content_len = "",
     std::string content_type = "",
-    std::string status_code="200",
-    std::string status_message="OK"){
+    std::string status_code="200",  
+    std::string status_message="OK",
+    std::string content_encoding=""){
         this->body = body;
         this->http_version = http_version;
         this->content_len = content_len;
         this->content_type = content_type;
         this->status_code = status_code;
         this->status_message = status_message;
+        this->content_encoding = content_encoding;
     }
 };
 
@@ -124,6 +131,7 @@ void handle_client(int client_fd, std::string directory){
             else if(buff == "User-Agent:") request_line_stream >> http_request.user_agent;
             else if(buff == "Content-Type:") request_line_stream >> http_request.content_type;
             else if(buff == "Content-Length:") request_line_stream >> http_request.content_len;
+            else if(buff == "Accept-Encoding:") request_line_stream >> http_request.accept_encoding;
         }
         // 3.解析body
         int content_length = 0;
@@ -153,7 +161,8 @@ void handle_client(int client_fd, std::string directory){
                 std::to_string(v.back().size()),
                 "text/plain",
                 "200",
-                "OK"
+                "OK",
+                http_request.accept_encoding
             );
             send(client_fd, response.response_string().data(), response.response_string().size(), 0);
         }
